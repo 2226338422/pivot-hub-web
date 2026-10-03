@@ -4,9 +4,9 @@ module.exports = defineConfig({
   devServer: {
     open: true,
     host: '0.0.0.0',
-    port: 8080,
+    port: 8088,
     proxy: {
-      // 开发环境代理：所有 /api 请求转发到 PivotHub Gateway（默认端口 8080）
+      // 开发环境代理：/api 请求转发到环境变量指定的 PivotHub Gateway
       '/api': {
         target: process.env.VUE_APP_BASE_API,
         changeOrigin: true,
