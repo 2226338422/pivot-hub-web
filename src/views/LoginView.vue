@@ -2,118 +2,115 @@
   <div class="login-container">
     <div class="login-box">
       <div class="login-header">
-        <div class="logo-area">
-          <span class="logo-letter">P</span>
-          <span class="logo-text">PivotHub</span>
-        </div>
+        <div class="logo-area"><span class="logo-letter">P</span><span class="logo-text">PivotHub</span></div>
         <p class="login-desc">管理系统</p>
       </div>
-
-      <el-form
-        ref="loginForm"
-        :model="loginForm"
-        :rules="loginRules"
-        class="login-form"
-        label-position="top"
-      >
-        <el-form-item label="用户名" prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            prefix-icon="el-icon-user"
-            size="large"
-            @keyup.enter.native="handleLogin"
-          />
+      <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form" label-position="top" @submit.native.prevent="handleLogin">
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="loginForm.email" placeholder="请输入邮箱" prefix-icon="el-icon-message" autocomplete="email" :disabled="loading" @keyup.enter.native="handleLogin" />
         </el-form-item>
-
-        <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            placeholder="请输入密码"
-            prefix-icon="el-icon-lock"
-            size="large"
-            show-password
-            @keyup.enter.native="handleLogin"
-          />
+        <el-form-item label="验证码" prop="code">
+          <div class="code-row">
+            <el-input v-model="loginForm.code" placeholder="请输入6位验证码" prefix-icon="el-icon-lock" maxlength="6" autocomplete="one-time-code" :disabled="loading" @keyup.enter.native="handleLogin" />
+            <el-button :loading="sendingCode" :disabled="loading || countdown > 0" @click="sendCode">{{ countdown > 0 ? countdown + '秒后重发' : '发送验证码' }}</el-button>
+          </div>
         </el-form-item>
-
         <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            :loading="loading"
-            class="login-btn"
-            @click="handleLogin"
-          >
-            登 录
-          </el-button>
+          <el-button type="primary" :loading="loading" class="login-btn" @click="handleLogin">登 录</el-button>
         </el-form-item>
       </el-form>
-
-      <div class="login-footer">
-        <span>默认管理员：admin / admin123</span>
-      </div>
+      <div class="login-footer"><span>使用邮箱验证码登录</span></div>
     </div>
   </div>
 </template>
 
 <script>
-import { login } from '@/api/system/auth'
+import { login, sendMailCode } from '@/api/system/auth'
+import { getResultData } from '@/utils/result'
+import { getLoginTarget } from '@/utils/menu'
 
 export default {
   name: 'LoginView',
   data() {
     return {
-      loginForm: {
-        username: '',
-        password: ''
-      },
+      loginForm: { email: '', code: '' },
       loginRules: {
-        username: [
-          { required: true, message: '请输入用户名', trigger: 'blur' }
-        ],
-        password: [
-          { required: true, message: '请输入密码', trigger: 'blur' },
-          { min: 6, message: '密码至少 6 位', trigger: 'blur' }
-        ]
+        email: [{ required: true, message: '请输入邮箱', trigger: 'blur' }, { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
+        code: [{ required: true, message: '请输入验证码', trigger: 'blur' }, { pattern: /^\d{6}$/, message: '验证码必须为6位数字', trigger: 'blur' }]
       },
-      loading: false
+      loading: false, sendingCode: false, countdown: 0, codeDeadline: 0, codeTimer: null
     }
   },
+  beforeDestroy() { clearInterval(this.codeTimer) },
   methods: {
-    handleLogin() {
-      this.$refs.loginForm.validate(async (valid) => {
+    normalizeForm() {
+      this.loginForm.email = this.loginForm.email.trim().toLowerCase()
+      this.loginForm.code = this.loginForm.code.trim()
+    },
+    errorMessage(error, fallback) {
+      return (error.response && error.response.data && error.response.data.msg) || (error.response ? fallback : error.message) || fallback
+    },
+    async sendCode() {
+      if (this.sendingCode || this.countdown > 0 || this.loading) return
+      this.sendingCode = true
+      this.normalizeForm()
+      try {
+        const valid = await new Promise(resolve => this.$refs.loginForm.validateField('email', message => resolve(!message)))
         if (!valid) return
-        this.loading = true
-        try {
-          const res = await login(this.loginForm)
-          if (res.data.code === 201 || res.data.code === 200) {
-            const { accessToken, refreshToken } = res.data.data
-            await this.$store.dispatch('common/handleLoginSuccess', {
-              accessToken,
-              refreshToken,
-              role: 'admin'
-            })
-            // 加载菜单树
-            const userId = res.data.data.userId
-            await this.$store.dispatch('system/fetchMenuTree', userId)
-            this.$router.push('/system/users')
-          } else {
-            this.$message.error(res.data.msg || '登录失败')
-          }
-        } catch (e) {
-          this.$message.error('登录失败，请检查用户名或密码')
-        } finally {
-          this.loading = false
+        getResultData(await sendMailCode(this.loginForm.email))
+        if (this._isDestroyed) return
+        this.$message.success('验证码已发送，请查收邮件')
+        this.codeDeadline = Date.now() + 60000
+        const tick = () => {
+          this.countdown = Math.max(0, Math.ceil((this.codeDeadline - Date.now()) / 1000))
+          if (!this.countdown) clearInterval(this.codeTimer)
         }
-      })
+        clearInterval(this.codeTimer)
+        tick()
+        this.codeTimer = setInterval(tick, 1000)
+      } catch (error) {
+        if (!this._isDestroyed) this.$message.error(this.errorMessage(error, '验证码发送失败，请稍后重试'))
+      } finally {
+        this.sendingCode = false
+      }
+    },
+    async handleLogin() {
+      if (this.loading) return
+      this.loading = true
+      this.normalizeForm()
+      let loggedIn = false
+      let version = this.$store.state.common.authVersion
+      try {
+        const valid = await this.$refs.loginForm.validate().catch(() => false)
+        if (!valid) return
+        const tokens = getResultData(await login(this.loginForm))
+        if (this._isDestroyed || this.$store.state.common.authVersion !== version) return
+        await this.$store.dispatch('common/handleLoginSuccess', tokens)
+        loggedIn = true
+        version += 1
+        if (this.$store.state.common.authVersion !== version) return
+        await this.$store.dispatch('system/ensureMenusLoaded')
+        if (this.$store.state.common.authVersion !== version || !this.$store.state.common.token) return
+        await this.$router.replace(getLoginTarget(this.$store.state.system.menuTree, this.$route.query.redirect))
+      } catch (error) {
+        if (error.authChanged || error.authHandled || this._isDestroyed || this.$store.state.common.authVersion !== version) return
+        if (loggedIn && this.$store.state.common.token) {
+          await this.$router.replace({ path: '/access-state', query: { kind: 'error' } })
+        } else {
+          this.$message.error(this.errorMessage(error, '登录失败，请检查邮箱和验证码'))
+        }
+      } finally {
+        this.loading = false
+      }
     }
   }
 }
 </script>
-
 <style scoped>
+.code-row { display: flex; gap: 12px; }
+.code-row .el-input { flex: 1; }
+.code-row .el-button { min-width: 120px; }
+
 .login-container {
   height: 100vh;
   display: flex;
