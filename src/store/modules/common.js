@@ -1,43 +1,57 @@
-import router from '@/router'
-import { Message } from 'element-ui'
+function validateTokens(tokens) {
+  if (!tokens || typeof tokens.accessToken !== 'string' || !tokens.accessToken.trim() ||
+      typeof tokens.refreshToken !== 'string' || !tokens.refreshToken.trim() || tokens.clientType !== 1) {
+    throw new Error('登录凭证响应无效')
+  }
+}
+
+function setAuth(state, tokens) {
+  state.token = tokens.accessToken
+  state.refreshToken = tokens.refreshToken
+  state.clientType = tokens.clientType
+  state.expiresIn = tokens.expiresIn
+  state.refreshExpiresIn = tokens.refreshExpiresIn
+}
 
 export default {
   namespaced: true,
   state: {
-    token: '',       // accessToken
-    refreshToken: '', // refreshToken
-    role: ''         // 当前角色：admin / manager / customer / merchant
+    token: '', refreshToken: '', clientType: 1,
+    expiresIn: null, refreshExpiresIn: null, authVersion: 0
   },
   mutations: {
-    SET_TOKEN(state, token) {
-      state.token = token
-    },
-    SET_REFRESH_TOKEN(state, token) {
-      state.refreshToken = token
-    },
-    SET_ROLE(state, role) {
-      state.role = role
+    SET_AUTH: setAuth,
+    BEGIN_LOGIN(state, tokens) {
+      state.authVersion += 1
+      setAuth(state, tokens)
     },
     CLEAR_AUTH(state) {
+      state.authVersion += 1
       state.token = ''
       state.refreshToken = ''
-      state.role = ''
+      state.clientType = 1
+      state.expiresIn = null
+      state.refreshExpiresIn = null
     }
   },
   actions: {
-    handleLoginSuccess({ commit }, { accessToken, refreshToken, role }) {
-      commit('SET_TOKEN', accessToken)
-      commit('SET_REFRESH_TOKEN', refreshToken)
-      commit('SET_ROLE', role)
+    handleLoginSuccess({ commit, dispatch }, tokens) {
+      validateTokens(tokens)
+      commit('BEGIN_LOGIN', tokens)
+      return dispatch('system/clearSystemState', null, { root: true })
     },
-    logout({ commit }) {
+    saveRefresh({ state, commit }, { tokens, authVersion }) {
+      if (state.authVersion !== authVersion || !state.token) return false
+      validateTokens(tokens)
+      commit('SET_AUTH', tokens)
+      return true
+    },
+    logout({ commit, dispatch }) {
       commit('CLEAR_AUTH')
-      localStorage.clear()
-      sessionStorage.clear()
+      return dispatch('system/clearSystemState', null, { root: true })
     }
   },
   getters: {
-    isLoggedIn: state => !!state.token,
-    currentRole: state => state.role
+    isLoggedIn: state => !!state.token
   }
 }
