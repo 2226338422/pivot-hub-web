@@ -15,18 +15,7 @@
         active-text-color="#409eff"
         class="sidebar-menu"
       >
-        <el-menu-item index="/system/users">
-          <i class="el-icon-user"></i>
-          <span slot="title">用户管理</span>
-        </el-menu-item>
-        <el-menu-item index="/system/roles">
-          <i class="el-icon-key"></i>
-          <span slot="title">角色管理</span>
-        </el-menu-item>
-        <el-menu-item index="/system/menus">
-          <i class="el-icon-menu"></i>
-          <span slot="title">菜单管理</span>
-        </el-menu-item>
+        <permission-menu-item v-for="node in menuTree" :key="node.uuid" :node="node" />
       </el-menu>
     </aside>
 
@@ -48,8 +37,7 @@
               <i class="el-icon-arrow-down"></i>
             </span>
             <el-dropdown-menu slot="dropdown">
-              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
-              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </el-dropdown>
         </div>
@@ -62,8 +50,11 @@
 </template>
 
 <script>
+import PermissionMenuItem from './PermissionMenuItem.vue'
+
 export default {
-  name: 'SystemLayout',
+  name: 'Layout',
+  components: { PermissionMenuItem },
   data() {
     return {
       isCollapsed: false
@@ -77,15 +68,18 @@ export default {
       return this.$route.meta.title || '系统管理'
     },
     currentUserName() {
-      return this.$store.state.system.currentUserName || '管理员'
+      const user = this.$store.state.system.userInfo || {}
+      return user.nickname || user.email || '用户'
+    },
+    menuTree() {
+      return this.$store.state.system.menuTree
     }
   },
   methods: {
-    handleCommand(cmd) {
+    async handleCommand(cmd) {
       if (cmd === 'logout') {
-        this.$store.dispatch('common/logout')
-        this.$store.dispatch('system/clearSystemState')
-        this.$router.push('/login')
+        await this.$store.dispatch('common/logout')
+        await this.$router.replace('/login')
       }
     }
   }
@@ -106,6 +100,7 @@ export default {
   background: #304156;
   transition: width 0.3s;
   overflow: hidden;
+  overflow-y: auto;
 }
 
 .sidebar-collapsed {
