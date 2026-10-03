@@ -1,65 +1,56 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
 import store from '@/store/index'
+import { menuRoutes } from './menuRoutes'
+import { getAllowedPaths, getLoginTarget, normalizeMenuPath } from '@/utils/menu'
 
 Vue.use(VueRouter)
 
 const routes = [
   {
-    path: '/',
-    redirect: '/login'
+    path: '/login', name: 'LoginView',
+    component: () => import('@/views/LoginView.vue'), meta: { title: '登录' }
   },
   {
-    path: '/login',
-    name: 'LoginView',
-    component: () => import('@/views/LoginView.vue'),
-    meta: { title: '登录' }
-  },
-  {
-    path: '/system',
-    component: () => import('@/components/SystemLayout.vue'),
+    path: '/', component: () => import('@/components/Layout.vue'),
     meta: { requiresAuth: true },
-    redirect: { name: 'ManageUser' },
     children: [
+      ...menuRoutes,
       {
-        path: 'users',
-        name: 'ManageUser',
-        component: () => import('@/views/System/ManageUser.vue'),
-        meta: { title: '用户管理', icon: 'el-icon-user' }
-      },
-      {
-        path: 'roles',
-        name: 'ManageRole',
-        component: () => import('@/views/System/ManageRole.vue'),
-        meta: { title: '角色管理', icon: 'el-icon-key' }
-      },
-      {
-        path: 'menus',
-        name: 'ManageMenu',
-        component: () => import('@/views/System/ManageMenu.vue'),
-        meta: { title: '菜单管理', icon: 'el-icon-menu' }
+        path: 'access-state', name: 'AccessState',
+        component: () => import('@/views/System/AccessStateView.vue'),
+        meta: { title: '访问状态', requiresAuth: true, permissionExempt: true }
       }
     ]
-  }
+  },
+  { path: '*', redirect: '/' }
 ]
 
-const router = new VueRouter({
-  mode: 'history',
-  base: process.env.BASE_URL,
-  routes
-})
+const router = new VueRouter({ mode: 'history', base: process.env.BASE_URL, routes })
 
-// 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   document.title = `${to.meta.title || 'PivotHub'} - 管理系统`
-  const token = store.state.common.token
-  if (to.path !== '/login' && !token) {
-    next('/login')
-  } else if (to.path === '/login' && token) {
-    next('/system/users')
-  } else {
-    next()
+  const auth = store.state.common
+  const requiresAuth = to.matched.some(route => route.meta.requiresAuth)
+  if (requiresAuth && !auth.token) return next({ path: '/login', query: { redirect: to.fullPath }, replace: true })
+  if (!requiresAuth && (to.path !== '/login' || !auth.token)) return next()
+  if (to.meta.permissionExempt) return next()
+  const authVersion = auth.authVersion
+  try {
+    await store.dispatch('system/ensureMenusLoaded')
+  } catch (error) {
+    if (!auth.token) return next({ path: '/login', replace: true })
+    if (error.authChanged || auth.authVersion !== authVersion) return next(false)
+    return next({ path: '/access-state', query: { kind: 'error' }, replace: true })
   }
+  if (auth.authVersion !== authVersion) return next(false)
+  const tree = store.state.system.menuTree
+  if (to.path === '/' || to.path === '/login') {
+    const target = getLoginTarget(tree, to.path === '/login' ? to.query.redirect : null)
+    return next(typeof target === 'string' ? { path: target, replace: true } : { ...target, replace: true })
+  }
+  if (getAllowedPaths(tree).has(normalizeMenuPath(to.path))) return next()
+  return next({ path: '/access-state', query: { kind: 'forbidden' }, replace: true })
 })
 
 export default router
