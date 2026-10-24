@@ -18,7 +18,7 @@ const routes = [
       ...menuRoutes,
       {
         path: 'access-state', name: 'AccessState',
-        component: () => import('@/views/System/AccessStateView.vue'),
+        component: () => import('@/views/AccessStateView.vue'),
         meta: { title: '访问状态', requiresAuth: true, permissionExempt: true }
       }
     ]
