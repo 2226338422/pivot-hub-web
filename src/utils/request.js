@@ -79,7 +79,7 @@ request.interceptors.response.use(response => response, async error => {
     throw error
   }
   if (code !== 40302) {
-    if (hooks.reportError) hooks.reportError((response && response.data && response.data.msg) || '请求失败，请检查网络后重试')
+    if (!config.silentError && hooks.reportError) hooks.reportError((response && response.data && response.data.msg) || '请求失败，请检查网络后重试')
     throw error
   }
   if (config._authRetry) {
