@@ -50,7 +50,7 @@ import AddressSearch from './components/AddressSearch.vue'
 import MapFeedback from './components/MapFeedback.vue'
 import { getMapError } from '@/utils/map/mapErrors'
 export default {
-  name: 'MapWorkspaceView', components: { MapCanvas, ThemeFormDialog, CategoryIconPanel, PointFormDrawer, RoutePanel, AddressSearch, MapFeedback },
+  name: 'MapFavoritesView', components: { MapCanvas, ThemeFormDialog, CategoryIconPanel, PointFormDrawer, RoutePanel, AddressSearch, MapFeedback },
   data: () => ({
     themes: [], themeId: '', categories: [], markers: [], allPoints: [], pointPage: { list: [], total: 0 },
     keyword: '', categoryFilter: '', pageNum: 1, selectedPoint: null, editingPoint: null, pointFormVisible: false,
