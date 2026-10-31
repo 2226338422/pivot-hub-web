@@ -6,6 +6,7 @@ const scope = new URL(self.registration.scope)
 const script = new URL(self.location.href)
 const defaultHost = '/api/business/map/amap/_AMapService'
 const proxyPath = normalizeHost(script.searchParams.get('proxy') || defaultHost)
+const sdkPath = '/_AMapService'
 
 function normalizeHost(value) {
   if (typeof value !== 'string' || !value || /[%\\;\s]/.test(value)) throw new Error('Invalid proxy path')
@@ -83,13 +84,17 @@ async function notifyInvalid(id, state) {
 
 async function proxy(event, url) {
   try {
+    const target = new URL(url.href)
+    if (target.pathname.startsWith(sdkPath + '/')) {
+      target.pathname = proxyPath + target.pathname.substring(sdkPath.length)
+    }
     let state = await confirm(event.clientId)
     for (let attempt = 0; attempt < 2; attempt++) {
       await confirm(event.clientId, state)
       const headers = new Headers({ Authorization: `Bearer ${state.token}` })
       const accept = event.request.headers.get('Accept')
       if (accept && accept.length <= 1024 && !/[\r\n]/.test(accept)) headers.set('Accept', accept)
-      const upstream = await fetch(url.href, { method: 'GET', mode: 'same-origin', credentials: 'omit', headers, cache: 'no-store', redirect: 'error' })
+      const upstream = await fetch(target.href, { method: 'GET', mode: 'same-origin', credentials: 'omit', headers, cache: 'no-store', redirect: 'error' })
       const bytes = await upstream.arrayBuffer()
       await confirm(event.clientId, state)
       const response = new Response(upstream.status === 204 || upstream.status === 205 || upstream.status === 304 ? null : bytes, { status: upstream.status, statusText: upstream.statusText, headers: upstream.headers })
@@ -128,7 +133,8 @@ self.addEventListener('message', event => {
 })
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url)
-  if (event.request.method !== 'GET' || url.origin !== self.location.origin || !url.pathname.startsWith(proxyPath + '/')) return
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin ||
+      (!url.pathname.startsWith(proxyPath + '/') && !url.pathname.startsWith(sdkPath + '/'))) return
   if (/[%\\;]/.test(url.pathname) || url.pathname.includes('//') || url.pathname.split('/').some(part => part === '.' || part === '..')) { event.respondWith(denied()); return }
   event.respondWith(proxy(event, url))
 })
