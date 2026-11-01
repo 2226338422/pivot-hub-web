@@ -26,6 +26,9 @@ export default {
       state.menusLoaded = true
       state.menuLoadError = null
     },
+    SET_USER_INFO(state, userInfo) {
+      state.userInfo = userInfo
+    },
     SET_LOAD_ERROR(state, message) {
       state.userInfo = null
       state.menuTree = []

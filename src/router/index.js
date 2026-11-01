@@ -20,6 +20,11 @@ const routes = [
         path: 'access-state', name: 'AccessState',
         component: () => import('@/views/AccessStateView.vue'),
         meta: { title: '访问状态', requiresAuth: true, permissionExempt: true }
+      },
+      {
+        path: 'profile', name: 'Profile',
+        component: () => import('@/views/System/Profile/ProfileView.vue'),
+        meta: { title: '个人中心', requiresAuth: true, permissionExempt: true }
       }
     ]
   },
@@ -34,7 +39,6 @@ router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(route => route.meta.requiresAuth)
   if (requiresAuth && !auth.token) return next({ path: '/login', query: { redirect: to.fullPath }, replace: true })
   if (!requiresAuth && (to.path !== '/login' || !auth.token)) return next()
-  if (to.meta.permissionExempt) return next()
   const authVersion = auth.authVersion
   try {
     await store.dispatch('system/ensureMenusLoaded')
@@ -44,6 +48,7 @@ router.beforeEach(async (to, from, next) => {
     return next({ path: '/access-state', query: { kind: 'error' }, replace: true })
   }
   if (auth.authVersion !== authVersion) return next(false)
+  if (to.meta.permissionExempt) return next()
   const tree = store.state.system.menuTree
   if (to.path === '/' || to.path === '/login') {
     const target = getLoginTarget(tree, to.path === '/login' ? to.query.redirect : null)

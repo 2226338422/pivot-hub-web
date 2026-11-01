@@ -32,12 +32,14 @@
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <span class="user-info">
-              <i class="el-icon-user-solid"></i>
+              <img v-if="avatarUrl" :src="avatarUrl" class="user-avatar" alt="" />
+              <span v-else class="user-avatar-fallback">{{ avatarLetter }}</span>
               {{ currentUserName }}
               <i class="el-icon-arrow-down"></i>
             </span>
             <el-dropdown-menu slot="dropdown">
-              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </el-dropdown>
         </div>
@@ -51,13 +53,15 @@
 
 <script>
 import PermissionMenuItem from './PermissionMenuItem.vue'
+import { fileUrl } from '@/utils/fileUrl'
 
 export default {
   name: 'Layout',
   components: { PermissionMenuItem },
   data() {
     return {
-      isCollapsed: false
+      isCollapsed: false,
+      avatarUrl: ''
     }
   },
   computed: {
@@ -71,13 +75,31 @@ export default {
       const user = this.$store.state.system.userInfo || {}
       return user.nickname || user.email || '用户'
     },
+    avatarLetter() {
+      const user = this.$store.state.system.userInfo || {}
+      return (user.nickname || user.email || 'U').charAt(0).toUpperCase()
+    },
+    avatarFileId() {
+      const user = this.$store.state.system.userInfo || {}
+      return user.avatarFileId || ''
+    },
     menuTree() {
       return this.$store.state.system.menuTree
     }
   },
+  watch: {
+    avatarFileId: {
+      immediate: true,
+      async handler(id) {
+        this.avatarUrl = id ? await fileUrl(id) : ''
+      }
+    }
+  },
   methods: {
     async handleCommand(cmd) {
-      if (cmd === 'logout') {
+      if (cmd === 'profile') {
+        this.$router.push('/profile')
+      } else if (cmd === 'logout') {
         await this.$store.dispatch('common/logout')
         await this.$router.replace('/login')
       }
@@ -183,6 +205,26 @@ export default {
   align-items: center;
   gap: 6px;
   font-size: 14px;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-avatar-fallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .content {
